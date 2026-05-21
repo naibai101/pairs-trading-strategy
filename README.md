@@ -36,20 +36,9 @@ Pairs trading is a market-neutral quantitative strategy that profits from the te
 
 ```
 pairs-trading/
-│
-├── src/
-│   ├── data_pipeline.py       # Data fetching and preprocessing
-│   ├── pair_selection.py      # Correlation and cointegration screening
-│   ├── signal_generation.py   # Spread and Z-score calculation
-│   ├── backtester.py          # Backtesting engine
-│   └── performance.py         # Performance metrics
-│
-├── notebooks/
-│   └── analysis.ipynb         # Exploratory analysis and visualizations
-│
-├── results/                   # Output charts and summary statistics
+├── pairs_trading.ipynb   # Everything
 ├── requirements.txt
-└── main.py                    # Entry point
+└── README.md
 ```
 
 ---
