@@ -36,7 +36,7 @@ Pairs trading is a market-neutral quantitative strategy that profits from the te
 
 ```
 pairs-trading/
-├── pairs_trading.ipynb   # Everything
+├── pairs_trading.py   # Everything
 ├── requirements.txt
 └── README.md
 ```
