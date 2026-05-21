@@ -70,7 +70,7 @@ pairs-trading/
 - **Data** — `yfinance`, `pandas`
 - **Statistics** — `statsmodels`, `scipy`
 - **Numerics** — `numpy`
-- **Visualization** — `matplotlib`, `seaborn`
+- **Visualization** — `matplotlib`
 
 ---
 
