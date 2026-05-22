@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #
 # pairs trading strategy for markets
 #
@@ -28,23 +27,4 @@ for ticker in tickers_list:
 df = yf.download(tickers_list, start=start, end=end)
 prices = df['Close']
 
-<<<<<<< Updated upstream
-
-=======
-#
-# pairs trading strategy for markets
-#
-
-import numpy as np
-import scipy as sp
-import pandas as pd
-import statsmodels as sm
-import matplotlib as plt
-import yfinance as yf
-
-CORRELATION_NUMBER = 0.8
-
->>>>>>> b63bb781358063faba62a277cdfb89729030140b
-=======
 prices
->>>>>>> Stashed changes
