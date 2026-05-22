@@ -16,16 +16,15 @@ end = "2025-12-31"
 interval = "1d"
 
 tickers_list = []
-tickers_dict = {}
 
+#finding the stocks in the s&p 
+table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+tickers_list = table[0]
 
 for ticker in tickers_list:
-    t = yf.Ticker(ticker)
+    ticker = ticker.replace(".", "-")
 
-    temp = pd.DataFrame.from_dict(t.info, orient='index')
+df = yf.download(tickers_list, start=start, end=end)
+prices = df['Close']
 
-ticker = yf.Ticker("aapl")
-historical = ticker.history(start=start, end=end, interval=interval)
-historical
 
-hello guys
