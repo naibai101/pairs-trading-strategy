@@ -8,6 +8,8 @@ import pandas as pd
 import statsmodels.api as sm
 import matplotlib as plt
 import yfinance as yf
+import requests
+import os
 
 #constants
 corrnum = 0.8
@@ -18,13 +20,20 @@ interval = "1d"
 tickers_list = []
 
 #finding the stocks in the s&p 
-table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", header=0, attrs={"id": "constituents"})
-tickers_list = table[0]
+if os.path.exists("prices.csv"):
+    prices = pd.read_csv("prices.csv", index_col=0, parse_dates=True)
+else:
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
+    table = pd.read_html(response.text)
+    tickers_list = table[0]["Symbol"].tolist()
 
-for ticker in tickers_list:
-    ticker = ticker.replace(".", "-")
+    for ticker in tickers_list:
+        ticker = ticker.replace(".", "-")
+    df = yf.download(tickers_list, start=start, end=end)
+    prices = df['Close']
+    prices.to_csv("prices.csv") 
 
-df = yf.download(tickers_list, start=start, end=end)
-prices = df['Close']
-
-prices
+print(prices.head())
+print(prices.shape)
