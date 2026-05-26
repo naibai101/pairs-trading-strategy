@@ -35,5 +35,9 @@ else:
     prices = df['Close']
     prices.to_csv("prices.csv") 
 
-print(prices.head())
-print(prices.shape)
+#calculating correlations
+corr_matrix = prices.corr()
+matrix = np.triu(corr_matrix, k=1)
+pairs = matrix[(matrix > 0.8) & (matrix < 1.0)]
+print(pairs.reset_index())
+
