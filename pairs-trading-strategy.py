@@ -120,15 +120,48 @@ for _, row in top_pairs.iterrows():
 results_df = pd.DataFrame(results)
 print(results_df.to_string(index=False))
 
-best = top_pairs.iloc[0]
-rets = backtest_pair(prices, best["ticker_1"], best["ticker_2"])
-equity = (1 + rets).cumprod()
+palette = [
+    "#e040fb", "#ce93d8", "#f48fb1", "#f06292", "#ba68c8",
+    "#ab47bc", "#ec407a", "#ff80ab", "#ea80fc", "#b39ddb",
+]
 
-plt.figure(figsize=(12, 5))
-plt.plot(equity.values)
-plt.title(f"Equity Curve: {best['ticker_1']}/{best['ticker_2']}")
-plt.xlabel("Days")
-plt.ylabel("Cumulative Return")
+fig, ax = plt.subplots(figsize=(14, 7))
+fig.patch.set_facecolor("#0e0e1a")
+ax.set_facecolor("#0e0e1a")
+
+for i, (_, row) in enumerate(top_pairs.iterrows()):
+    t1, t2 = row["ticker_1"], row["ticker_2"]
+    rets = backtest_pair(prices, t1, t2)
+    equity = (1 + rets).cumprod()
+    color = palette[i % len(palette)]
+    ax.plot(equity.values, color=color, linewidth=1.4, alpha=0.85, label=f"{t1} / {t2}")
+    ax.annotate(
+        f"{t1}/{t2}",
+        xy=(len(equity) - 1, equity.iloc[-1]),
+        xytext=(6, 0),
+        textcoords="offset points",
+        color=color,
+        fontsize=7.5,
+        va="center",
+    )
+
+ax.axhline(1.0, color="#444466", linewidth=0.8, linestyle="--")
+ax.set_title("Equity Curves — Top Cointegrated Pairs (S&P 500)", color="#f0e6ff", fontsize=14, pad=14)
+ax.set_xlabel("Trading Days", color="#9e8fb2", fontsize=10)
+ax.set_ylabel("Cumulative Return", color="#9e8fb2", fontsize=10)
+ax.tick_params(colors="#9e8fb2")
+for spine in ax.spines.values():
+    spine.set_edgecolor("#2a2040")
+ax.grid(color="#1e1a2e", linewidth=0.6)
+ax.legend(
+    loc="upper left",
+    fontsize=7.5,
+    framealpha=0.2,
+    facecolor="#1a1030",
+    edgecolor="#3a2060",
+    labelcolor="#d8bfff",
+)
+
 plt.tight_layout()
-plt.savefig("equity_curve.png", dpi=150)
+plt.savefig("equity_curve.png", dpi=150, facecolor=fig.get_facecolor())
 plt.show()
