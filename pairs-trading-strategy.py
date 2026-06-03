@@ -107,14 +107,16 @@ for _, row in top_pairs.iterrows():
     sharpe = rets.mean() / rets.std() * np.sqrt(252) if rets.std() > 0 else 0
     cumrets = (1 + rets).cumprod()
     max_dd = (cumrets / cumrets.cummax() - 1).min()
-    win_rate = (rets > 0).mean()
+    gross_profit = rets[rets > 0].sum()
+    gross_loss = abs(rets[rets < 0].sum())
+    profit_factor = round(gross_profit / gross_loss, 3) if gross_loss > 0 else float("inf")
 
     results.append({
         "pair": f"{t1}/{t2}",
         "total_return_%": round(total_return * 100, 2),
         "sharpe": round(sharpe, 3),
         "max_drawdown_%": round(max_dd * 100, 2),
-        "win_rate_%": round(win_rate * 100, 2),
+        "profit_factor": profit_factor,
     })
 
 results_df = pd.DataFrame(results)
