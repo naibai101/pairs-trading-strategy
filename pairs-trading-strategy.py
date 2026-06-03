@@ -59,7 +59,7 @@ top_pairs = coint_df.head(10)
 
 
 def backtest_pair(prices, t1, t2):
-    pair = prices[[t1, t2]].dropna()
+    pair = np.log(prices[[t1, t2]].dropna())
 
     roll_cov = pair[t1].rolling(lookback).cov(pair[t2])
     roll_var = pair[t2].rolling(lookback).var()
@@ -89,13 +89,15 @@ def backtest_pair(prices, t1, t2):
                 position = -1
             elif z[i - 1] < -z_entry:
                 position = 1
-        elif position == 1 and z[i - 1] > -z_exit:
-            position = 0
-        elif position == -1 and z[i - 1] < z_exit:
-            position = 0
+        elif position == 1:
+            if z[i - 1] > -z_exit or z[i - 1] < -z_stop:
+                position = 0
+        elif position == -1:
+            if z[i - 1] < z_exit or z[i - 1] > z_stop:
+                position = 0
 
-        r1 = p1[i] / p1[i - 1] - 1
-        r2 = p2[i] / p2[i - 1] - 1
+        r1 = p1[i] - p1[i - 1]
+        r2 = p2[i] - p2[i - 1]
         returns.append(position * (r1 - hr[i - 1] * r2))
 
     return pd.Series(returns)
