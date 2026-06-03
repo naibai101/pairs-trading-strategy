@@ -7,12 +7,13 @@ import yfinance as yf
 import requests
 import os
 
-corrnum = 0.8
+corrnum = 0.85
 start = "2000-01-01"
 end = "2025-12-31"
 z_entry = 2.0
 z_exit = 0.5
 lookback = 60
+max_coint_candidates = 100
 
 if os.path.exists("prices.csv"):
     prices = pd.read_csv("prices.csv", index_col=0, parse_dates=True)
@@ -31,7 +32,12 @@ corr_matrix = prices.corr()
 upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
 corr_matrix = corr_matrix.where(upper).stack().reset_index()
 corr_matrix = corr_matrix.rename(columns={"level_0": "ticker_1", "level_1": "ticker_2", 0: "correlation"})
-corr_matrix = corr_matrix[corr_matrix["correlation"] > corrnum].reset_index(drop=True)
+corr_matrix = (
+    corr_matrix[corr_matrix["correlation"] > corrnum]
+    .sort_values("correlation", ascending=False)
+    .head(max_coint_candidates)
+    .reset_index(drop=True)
+)
 
 coint_results = []
 for _, row in corr_matrix.iterrows():
@@ -48,47 +54,49 @@ coint_df = pd.DataFrame(coint_results)
 coint_df = coint_df[coint_df["pvalue"] < 0.05].sort_values("pvalue").reset_index(drop=True)
 top_pairs = coint_df.head(10)
 
+
 def backtest_pair(prices, t1, t2):
     pair = prices[[t1, t2]].dropna()
 
-    hedge_ratios = []
-    for i in range(lookback, len(pair)):
-        window = pair.iloc[i - lookback:i]
-        X = sm.add_constant(window[t2])
-        model = sm.OLS(window[t1], X).fit()
-        hedge_ratios.append(model.params[t2])
+    roll_cov = pair[t1].rolling(lookback).cov(pair[t2])
+    roll_var = pair[t2].rolling(lookback).var()
+    hedge_ratio = roll_cov / roll_var
 
-    pair = pair.iloc[lookback:].copy()
-    pair["hedge_ratio"] = hedge_ratios
-    pair["spread"] = pair[t1] - pair["hedge_ratio"] * pair[t2]
+    spread = pair[t1] - hedge_ratio * pair[t2]
+    roll_mean = spread.rolling(lookback).mean()
+    roll_std = spread.rolling(lookback).std()
+    zscore = (spread - roll_mean) / roll_std
 
-    roll_mean = pair["spread"].rolling(lookback).mean()
-    roll_std = pair["spread"].rolling(lookback).std()
-    pair["zscore"] = (pair["spread"] - roll_mean) / roll_std
+    pair = pair.copy()
+    pair["hedge_ratio"] = hedge_ratio
+    pair["zscore"] = zscore
     pair = pair.dropna()
+
+    z = pair["zscore"].values
+    hr = pair["hedge_ratio"].values
+    p1 = pair[t1].values
+    p2 = pair[t2].values
 
     position = 0
     returns = []
 
     for i in range(1, len(pair)):
-        z = pair["zscore"].iloc[i - 1]
-        hr = pair["hedge_ratio"].iloc[i - 1]
-        r1 = pair[t1].iloc[i] / pair[t1].iloc[i - 1] - 1
-        r2 = pair[t2].iloc[i] / pair[t2].iloc[i - 1] - 1
-
         if position == 0:
-            if z > z_entry:
+            if z[i - 1] > z_entry:
                 position = -1
-            elif z < -z_entry:
+            elif z[i - 1] < -z_entry:
                 position = 1
-        elif position == 1 and z > -z_exit:
+        elif position == 1 and z[i - 1] > -z_exit:
             position = 0
-        elif position == -1 and z < z_exit:
+        elif position == -1 and z[i - 1] < z_exit:
             position = 0
 
-        returns.append(position * (r1 - hr * r2))
+        r1 = p1[i] / p1[i - 1] - 1
+        r2 = p2[i] / p2[i - 1] - 1
+        returns.append(position * (r1 - hr[i - 1] * r2))
 
     return pd.Series(returns)
+
 
 results = []
 for _, row in top_pairs.iterrows():
