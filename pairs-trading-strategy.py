@@ -12,6 +12,7 @@ start = "2000-01-01"
 end = "2025-12-31"
 z_entry = 2.0
 z_exit = 0.5
+z_stop = 4.0
 lookback = 60
 max_coint_candidates = 100
 
