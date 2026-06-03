@@ -111,3 +111,16 @@ for _, row in top_pairs.iterrows():
 
 results_df = pd.DataFrame(results)
 print(results_df.to_string(index=False))
+
+best = top_pairs.iloc[0]
+rets = backtest_pair(prices, best["ticker_1"], best["ticker_2"])
+equity = (1 + rets).cumprod()
+
+plt.figure(figsize=(12, 5))
+plt.plot(equity.values)
+plt.title(f"Equity Curve: {best['ticker_1']}/{best['ticker_2']}")
+plt.xlabel("Days")
+plt.ylabel("Cumulative Return")
+plt.tight_layout()
+plt.savefig("equity_curve.png", dpi=150)
+plt.show()
