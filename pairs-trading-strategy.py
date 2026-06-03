@@ -40,12 +40,14 @@ corr_matrix = (
     .reset_index(drop=True)
 )
 
+log_prices = np.log(prices)
+
 coint_results = []
 for _, row in corr_matrix.iterrows():
     t1, t2 = row["ticker_1"], row["ticker_2"]
-    if t1 not in prices.columns or t2 not in prices.columns:
+    if t1 not in log_prices.columns or t2 not in log_prices.columns:
         continue
-    pair_prices = prices[[t1, t2]].dropna()
+    pair_prices = log_prices[[t1, t2]].dropna()
     if len(pair_prices) < 252:
         continue
     _, pvalue, _ = coint(pair_prices[t1], pair_prices[t2])
