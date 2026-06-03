@@ -120,7 +120,7 @@ def backtest_pair(prices, t1, t2):
 results = []
 for _, row in top_pairs.iterrows():
     t1, t2 = row["ticker_1"], row["ticker_2"]
-    rets = backtest_pair(prices, t1, t2)
+    rets = backtest_pair(test_prices, t1, t2)
 
     total_return = (1 + rets).prod() - 1
     n_years = len(rets) / 252
@@ -161,7 +161,7 @@ ax.set_facecolor("#0e0e1a")
 
 for i, (_, row) in enumerate(top_pairs.iterrows()):
     t1, t2 = row["ticker_1"], row["ticker_2"]
-    rets = backtest_pair(prices, t1, t2)
+    rets = backtest_pair(test_prices, t1, t2)
     equity = (1 + rets).cumprod()
     color = palette[i % len(palette)]
     ax.plot(equity.values, color=color, linewidth=1.4, alpha=0.85, label=f"{t1} / {t2}")
