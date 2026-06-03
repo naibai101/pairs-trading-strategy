@@ -31,7 +31,11 @@ else:
     prices = df["Close"]
     prices.to_csv("prices.csv")
 
-corr_matrix = prices.corr()
+train_prices = prices.loc[:train_end]
+test_prices = prices.loc[train_end:]
+
+train_returns = train_prices.pct_change().dropna()
+corr_matrix = train_returns.corr()
 upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
 corr_matrix = corr_matrix.where(upper).stack().reset_index()
 corr_matrix = corr_matrix.rename(columns={"level_0": "ticker_1", "level_1": "ticker_2", 0: "correlation"})
@@ -42,14 +46,14 @@ corr_matrix = (
     .reset_index(drop=True)
 )
 
-log_prices = np.log(prices)
+train_log = np.log(train_prices)
 
 coint_results = []
 for _, row in corr_matrix.iterrows():
     t1, t2 = row["ticker_1"], row["ticker_2"]
-    if t1 not in log_prices.columns or t2 not in log_prices.columns:
+    if t1 not in train_log.columns or t2 not in train_log.columns:
         continue
-    pair_prices = log_prices[[t1, t2]].dropna()
+    pair_prices = train_log[[t1, t2]].dropna()
     if len(pair_prices) < 252:
         continue
     _, pvalue, _ = coint(pair_prices[t1], pair_prices[t2])
