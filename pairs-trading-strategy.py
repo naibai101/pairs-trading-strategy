@@ -32,3 +32,18 @@ upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
 corr_matrix = corr_matrix.where(upper).stack().reset_index()
 corr_matrix = corr_matrix.rename(columns={"level_0": "ticker_1", "level_1": "ticker_2", 0: "correlation"})
 corr_matrix = corr_matrix[corr_matrix["correlation"] > corrnum].reset_index(drop=True)
+
+coint_results = []
+for _, row in corr_matrix.iterrows():
+    t1, t2 = row["ticker_1"], row["ticker_2"]
+    if t1 not in prices.columns or t2 not in prices.columns:
+        continue
+    pair_prices = prices[[t1, t2]].dropna()
+    if len(pair_prices) < 252:
+        continue
+    _, pvalue, _ = coint(pair_prices[t1], pair_prices[t2])
+    coint_results.append({"ticker_1": t1, "ticker_2": t2, "pvalue": pvalue})
+
+coint_df = pd.DataFrame(coint_results)
+coint_df = coint_df[coint_df["pvalue"] < 0.05].sort_values("pvalue").reset_index(drop=True)
+top_pairs = coint_df.head(10)
