@@ -13,7 +13,8 @@ end = "2025-12-31"
 z_entry = 2.0
 z_exit = 0.5
 z_stop = 4.0
-lookback = 60
+lookback_hedge = 252
+lookback_zscore = 60
 max_coint_candidates = 100
 
 if os.path.exists("prices.csv"):
@@ -61,13 +62,13 @@ top_pairs = coint_df.head(10)
 def backtest_pair(prices, t1, t2):
     pair = np.log(prices[[t1, t2]].dropna())
 
-    roll_cov = pair[t1].rolling(lookback).cov(pair[t2])
-    roll_var = pair[t2].rolling(lookback).var()
+    roll_cov = pair[t1].rolling(lookback_hedge).cov(pair[t2])
+    roll_var = pair[t2].rolling(lookback_hedge).var()
     hedge_ratio = roll_cov / roll_var
 
     spread = pair[t1] - hedge_ratio * pair[t2]
-    roll_mean = spread.rolling(lookback).mean()
-    roll_std = spread.rolling(lookback).std()
+    roll_mean = spread.rolling(lookback_zscore).mean()
+    roll_std = spread.rolling(lookback_zscore).std()
     zscore = (spread - roll_mean) / roll_std
 
     pair = pair.copy()
