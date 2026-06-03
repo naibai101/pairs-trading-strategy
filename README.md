@@ -35,9 +35,10 @@ Pairs trading is a market-neutral quantitative strategy that profits from the te
 ## Project Structure
 
 ```
-pairs-trading/
-├── pairs_trading.py   # Everything
-├── requirements.txt
+pairs-trading-strategy/
+├── pairs-trading-strategy.py
+├── prices.csv
+├── equity_curve.png
 └── README.md
 ```
 
@@ -63,14 +64,15 @@ pairs-trading/
 
 ---
 
-## Roadmap
+## Completed
 
-- [ ] Data pipeline
-- [ ] Pair selection (correlation + cointegration)
-- [ ] Spread construction and Z-score signals
-- [ ] Backtesting engine
-- [ ] Performance reporting and visualization
-- [ ] Dynamic hedge ratio via Kalman Filter
+- [x] Data pipeline — pulls S&P 500 closing prices via yfinance, cached to CSV
+- [x] Pair selection — correlation filter (>0.8) + Engle-Granger cointegration test (p < 0.05)
+- [x] Spread construction — rolling OLS hedge ratio, z-score normalization
+- [x] Signal generation — entry at |z| > 2.0, exit at |z| < 0.5
+- [x] Backtesting engine — simulates daily P&L across top 10 cointegrated pairs
+- [x] Performance reporting — Sharpe ratio, total return, max drawdown, win rate
+- [x] Visualization — equity curve saved to PNG
 
 ---
 
