@@ -89,3 +89,25 @@ def backtest_pair(prices, t1, t2):
         returns.append(position * (r1 - hr * r2))
 
     return pd.Series(returns)
+
+results = []
+for _, row in top_pairs.iterrows():
+    t1, t2 = row["ticker_1"], row["ticker_2"]
+    rets = backtest_pair(prices, t1, t2)
+
+    total_return = (1 + rets).prod() - 1
+    sharpe = rets.mean() / rets.std() * np.sqrt(252) if rets.std() > 0 else 0
+    cumrets = (1 + rets).cumprod()
+    max_dd = (cumrets / cumrets.cummax() - 1).min()
+    win_rate = (rets > 0).mean()
+
+    results.append({
+        "pair": f"{t1}/{t2}",
+        "total_return_%": round(total_return * 100, 2),
+        "sharpe": round(sharpe, 3),
+        "max_drawdown_%": round(max_dd * 100, 2),
+        "win_rate_%": round(win_rate * 100, 2),
+    })
+
+results_df = pd.DataFrame(results)
+print(results_df.to_string(index=False))
