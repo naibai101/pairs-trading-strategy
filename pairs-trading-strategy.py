@@ -8,12 +8,14 @@ import os
 
 corrnum = 0.85
 start = "2000-01-01"
+train_end = "2010-12-31"
 end = "2025-12-31"
 z_entry = 2.0
 z_exit = 0.5
-z_stop = 2.0
+z_stop = 3.5
 lookback_hedge = 252
 lookback_zscore = 60
+transaction_cost = 0.001
 max_coint_candidates = 100
 
 if os.path.exists("prices.csv"):
