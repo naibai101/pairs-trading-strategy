@@ -104,19 +104,28 @@ for _, row in top_pairs.iterrows():
     rets = backtest_pair(prices, t1, t2)
 
     total_return = (1 + rets).prod() - 1
+    n_years = len(rets) / 252
+    ann_return = (1 + total_return) ** (1 / n_years) - 1 if n_years > 0 else 0
     sharpe = rets.mean() / rets.std() * np.sqrt(252) if rets.std() > 0 else 0
+    downside = rets[rets < 0].std()
+    sortino = rets.mean() / downside * np.sqrt(252) if downside > 0 else 0
     cumrets = (1 + rets).cumprod()
     max_dd = (cumrets / cumrets.cummax() - 1).min()
+    calmar = ann_return / abs(max_dd) if max_dd != 0 else 0
     gross_profit = rets[rets > 0].sum()
     gross_loss = abs(rets[rets < 0].sum())
     profit_factor = round(gross_profit / gross_loss, 3) if gross_loss > 0 else float("inf")
+    position_changes = pd.Series(np.diff([0] + [1 if r != 0 else 0 for r in rets.values]))
+    num_trades = int((position_changes == 1).sum())
 
     results.append({
         "pair": f"{t1}/{t2}",
-        "total_return_%": round(total_return * 100, 2),
+        "ann_return_%": round(ann_return * 100, 2),
         "sharpe": round(sharpe, 3),
-        "max_drawdown_%": round(max_dd * 100, 2),
+        "sortino": round(sortino, 3),
+        "calmar": round(calmar, 3),
         "profit_factor": profit_factor,
+        "num_trades": num_trades,
     })
 
 results_df = pd.DataFrame(results)
