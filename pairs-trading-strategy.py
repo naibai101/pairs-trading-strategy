@@ -47,3 +47,45 @@ for _, row in corr_matrix.iterrows():
 coint_df = pd.DataFrame(coint_results)
 coint_df = coint_df[coint_df["pvalue"] < 0.05].sort_values("pvalue").reset_index(drop=True)
 top_pairs = coint_df.head(10)
+
+def backtest_pair(prices, t1, t2):
+    pair = prices[[t1, t2]].dropna()
+
+    hedge_ratios = []
+    for i in range(lookback, len(pair)):
+        window = pair.iloc[i - lookback:i]
+        X = sm.add_constant(window[t2])
+        model = sm.OLS(window[t1], X).fit()
+        hedge_ratios.append(model.params[t2])
+
+    pair = pair.iloc[lookback:].copy()
+    pair["hedge_ratio"] = hedge_ratios
+    pair["spread"] = pair[t1] - pair["hedge_ratio"] * pair[t2]
+
+    roll_mean = pair["spread"].rolling(lookback).mean()
+    roll_std = pair["spread"].rolling(lookback).std()
+    pair["zscore"] = (pair["spread"] - roll_mean) / roll_std
+    pair = pair.dropna()
+
+    position = 0
+    returns = []
+
+    for i in range(1, len(pair)):
+        z = pair["zscore"].iloc[i - 1]
+        hr = pair["hedge_ratio"].iloc[i - 1]
+        r1 = pair[t1].iloc[i] / pair[t1].iloc[i - 1] - 1
+        r2 = pair[t2].iloc[i] / pair[t2].iloc[i - 1] - 1
+
+        if position == 0:
+            if z > z_entry:
+                position = -1
+            elif z < -z_entry:
+                position = 1
+        elif position == 1 and z > -z_exit:
+            position = 0
+        elif position == -1 and z < z_exit:
+            position = 0
+
+        returns.append(position * (r1 - hr * r2))
+
+    return pd.Series(returns)
