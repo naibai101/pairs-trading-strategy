@@ -10,9 +10,9 @@ corrnum = 0.85
 start = "2000-01-01"
 train_end = "2010-12-31"
 end = "2025-12-31"
-z_entry = 1.5
+z_entry = 2.0
 z_exit = 0.5
-z_stop = 3.5
+z_stop = 4.0
 transaction_cost = 0.001
 max_coint_candidates = 150
 
@@ -42,6 +42,7 @@ else:
 
 train_prices = prices.loc[:train_end]
 test_prices = prices.loc[train_end:]
+train_log = np.log(train_prices)
 
 corr_matrix = train_prices.corr()
 upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
@@ -57,31 +58,13 @@ corr_matrix = (
 
 def half_life(spread):
     s = spread.dropna().values
-    lag = s[:-1]
-    diff = np.diff(s)
+    lag, diff = s[:-1], np.diff(s)
     X = np.column_stack([np.ones(len(lag)), lag])
     beta = np.linalg.lstsq(X, diff, rcond=None)[0]
     if beta[1] >= 0:
         return np.nan
     return -np.log(2) / beta[1]
 
-
-def kalman_hedge(log_p1, log_p2, delta=1e-4, Ve=0.001):
-    n = len(log_p1)
-    Vw = delta / (1 - delta)
-    beta = np.ones(n)
-    P = np.ones(n)
-    for t in range(1, n):
-        P_pred = P[t - 1] + Vw
-        x = log_p2[t]
-        S = x ** 2 * P_pred + Ve
-        K = P_pred * x / S
-        beta[t] = beta[t - 1] + K * (log_p1[t] - beta[t - 1] * x)
-        P[t] = (1 - K * x) * P_pred
-    return beta
-
-
-train_log = np.log(train_prices)
 
 coint_results = []
 for _, row in corr_matrix.iterrows():
@@ -92,58 +75,54 @@ for _, row in corr_matrix.iterrows():
         continue
     if sectors[t1] != sectors[t2]:
         continue
-    pair_prices = train_log[[t1, t2]].dropna()
-    if len(pair_prices) < 252:
+    pair_train = train_log[[t1, t2]].dropna()
+    if len(pair_train) < 252:
         continue
-    _, pvalue, _ = coint(pair_prices[t1], pair_prices[t2])
-    if pvalue >= 0.01:
+    _, pvalue, _ = coint(pair_train[t1], pair_train[t2])
+    if pvalue >= 0.05:
         continue
-    X = np.column_stack([np.ones(len(pair_prices)), pair_prices[t2].values])
-    hr = np.linalg.lstsq(X, pair_prices[t1].values, rcond=None)[0][1]
-    spread = pair_prices[t1] - hr * pair_prices[t2]
-    hl = half_life(spread)
+    X = np.column_stack([np.ones(len(pair_train)), pair_train[t2].values])
+    hr = np.linalg.lstsq(X, pair_train[t1].values, rcond=None)[0][1]
+    spread_train = pair_train[t1] - hr * pair_train[t2]
+    hl = half_life(spread_train)
     if np.isnan(hl) or hl < 5 or hl > 60:
         continue
-    coint_results.append({"ticker_1": t1, "ticker_2": t2, "pvalue": pvalue, "half_life": round(hl, 1)})
+    mu = float(spread_train.mean())
+    sigma = float(spread_train.std())
+    coint_results.append({
+        "ticker_1": t1, "ticker_2": t2,
+        "pvalue": pvalue,
+        "half_life": round(hl, 1),
+        "hedge_ratio": hr,
+        "spread_mean": mu,
+        "spread_std": sigma,
+    })
 
-coint_df = pd.DataFrame(coint_results) if coint_results else pd.DataFrame(columns=["ticker_1", "ticker_2", "pvalue", "half_life"])
+coint_df = pd.DataFrame(coint_results) if coint_results else pd.DataFrame(
+    columns=["ticker_1", "ticker_2", "pvalue", "half_life", "hedge_ratio", "spread_mean", "spread_std"])
 coint_df = coint_df.sort_values("pvalue").reset_index(drop=True)
 if coint_df.empty:
     raise ValueError("No cointegrated pairs found. Try lowering corrnum or widening the training window.")
 top_pairs = coint_df.head(10)
 
 
-def backtest_pair(prices, t1, t2, hl):
-    raw = prices[[t1, t2]].dropna()
-    log_p1 = np.log(raw[t1].values)
-    log_p2 = np.log(raw[t2].values)
+def backtest_pair(test_prices, t1, t2, hr, mu, sigma):
+    raw = test_prices[[t1, t2]].dropna()
+    log_test = np.log(raw)
 
-    kalman_hr = kalman_hedge(log_p1, log_p2)
+    spread = log_test[t1] - hr * log_test[t2]
+    zscore = (spread - mu) / sigma
 
-    lb = max(int(hl * 2), 20)
-    spread = log_p1 - kalman_hr * log_p2
-    spread_s = pd.Series(spread, index=raw.index)
-    roll_mean = spread_s.rolling(lb).mean()
-    roll_std = spread_s.rolling(lb).std()
-    zscore = (spread_s - roll_mean) / roll_std
-
-    df = pd.DataFrame({
-        t1: raw[t1],
-        t2: raw[t2],
-        "zscore": zscore,
-        "hr": kalman_hr,
-    }).dropna()
-
-    z = df["zscore"].values
-    hr_arr = df["hr"].values
-    p1 = df[t1].values
-    p2 = df[t2].values
+    z = zscore.values
+    p1 = raw[t1].values
+    p2 = raw[t2].values
+    scale = 1.0 + abs(hr)
 
     position = 0
     prev_position = 0
     returns = []
 
-    for i in range(1, len(df)):
+    for i in range(1, len(raw)):
         if position == 0:
             if z[i - 1] > z_entry:
                 position = -1
@@ -156,10 +135,9 @@ def backtest_pair(prices, t1, t2, hl):
             if z[i - 1] < z_exit or z[i - 1] > z_stop:
                 position = 0
 
-        hr_t = hr_arr[i - 1]
         r1 = p1[i] / p1[i - 1] - 1
         r2 = p2[i] / p2[i - 1] - 1
-        pnl = position * (r1 - hr_t * r2) / (1.0 + abs(hr_t))
+        pnl = position * (r1 - hr * r2) / scale
 
         if position != prev_position:
             pnl -= transaction_cost * 2
@@ -172,8 +150,10 @@ def backtest_pair(prices, t1, t2, hl):
 
 results = []
 for _, row in top_pairs.iterrows():
-    t1, t2, hl = row["ticker_1"], row["ticker_2"], row["half_life"]
-    rets = backtest_pair(test_prices, t1, t2, hl)
+    t1, t2 = row["ticker_1"], row["ticker_2"]
+    hr, hl = row["hedge_ratio"], row["half_life"]
+    mu, sigma = row["spread_mean"], row["spread_std"]
+    rets = backtest_pair(test_prices, t1, t2, hr, mu, sigma)
 
     total_return = (1 + rets).prod() - 1
     n_years = len(rets) / 252
@@ -206,16 +186,8 @@ results_df = pd.DataFrame(results)
 print(results_df.to_string(index=False))
 
 palette = [
-    "#dc143c",
-    "#c0c0c0",
-    "#00b4d8",
-    "#e63946",
-    "#4fc3f7",
-    "#ff4d6d",
-    "#a8dadc",
-    "#9e0031",
-    "#48cae4",
-    "#d4d4d4",
+    "#dc143c", "#c0c0c0", "#00b4d8", "#e63946", "#4fc3f7",
+    "#ff4d6d", "#a8dadc", "#9e0031", "#48cae4", "#d4d4d4",
 ]
 
 BG       = "#0a0a0f"
@@ -229,8 +201,10 @@ fig.patch.set_facecolor(BG)
 ax.set_facecolor(BG)
 
 for i, (_, row) in enumerate(top_pairs.iterrows()):
-    t1, t2, hl = row["ticker_1"], row["ticker_2"], row["half_life"]
-    rets = backtest_pair(test_prices, t1, t2, hl)
+    t1, t2 = row["ticker_1"], row["ticker_2"]
+    hr, hl = row["hedge_ratio"], row["half_life"]
+    mu, sigma = row["spread_mean"], row["spread_std"]
+    rets = backtest_pair(test_prices, t1, t2, hr, mu, sigma)
     equity = (1 + rets).cumprod()
     color = palette[i % len(palette)]
     ax.plot(equity.values, color=color, linewidth=1.5, alpha=0.9, label=f"{t1} / {t2}")
@@ -239,10 +213,7 @@ for i, (_, row) in enumerate(top_pairs.iterrows()):
         xy=(len(equity) - 1, equity.iloc[-1]),
         xytext=(6, 0),
         textcoords="offset points",
-        color=color,
-        fontsize=7.5,
-        va="center",
-        fontweight="bold",
+        color=color, fontsize=7.5, va="center", fontweight="bold",
     )
 
 best_sharpe_row = results_df.loc[results_df["sharpe"].idxmax()]
@@ -256,11 +227,8 @@ stats_text = (
 )
 ax.text(
     0.01, 0.03, stats_text,
-    transform=ax.transAxes,
-    fontsize=8,
-    color="#c0c0c0",
-    verticalalignment="bottom",
-    fontfamily="monospace",
+    transform=ax.transAxes, fontsize=8, color="#c0c0c0",
+    verticalalignment="bottom", fontfamily="monospace",
     bbox=dict(boxstyle="round,pad=0.5", facecolor="#140505", edgecolor="#8b0000", alpha=0.85),
 )
 
@@ -272,14 +240,8 @@ ax.tick_params(colors=TEXT_COL)
 for spine in ax.spines.values():
     spine.set_edgecolor(SPINE)
 ax.grid(color=GRID_COL, linewidth=0.6)
-ax.legend(
-    loc="upper right",
-    fontsize=7.5,
-    framealpha=0.25,
-    facecolor="#0f0505",
-    edgecolor="#8b0000",
-    labelcolor=TEXT_COL,
-)
+ax.legend(loc="upper right", fontsize=7.5, framealpha=0.25,
+          facecolor="#0f0505", edgecolor="#8b0000", labelcolor=TEXT_COL)
 
 plt.tight_layout()
 plt.savefig("equity_curve.png", dpi=150, facecolor=fig.get_facecolor())
