@@ -6,7 +6,7 @@ import yfinance as yf
 import requests
 import os
 
-corrnum = 0.65
+corrnum = 0.85
 start = "2000-01-01"
 train_end = "2010-12-31"
 end = "2025-12-31"
@@ -39,7 +39,7 @@ upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
 corr_matrix = corr_matrix.where(upper).stack().reset_index()
 corr_matrix = corr_matrix.rename(columns={"level_0": "ticker_1", "level_1": "ticker_2", 0: "correlation"})
 corr_matrix = (
-    corr_matrix[corr_matrix["correlation"] > corrnum]
+    corr_matrix[(corr_matrix["correlation"] > corrnum) & (corr_matrix["correlation"] < 0.99)]
     .sort_values("correlation", ascending=False)
     .head(max_coint_candidates)
     .reset_index(drop=True)
