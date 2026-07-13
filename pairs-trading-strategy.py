@@ -6,7 +6,7 @@ import yfinance as yf
 import requests
 import os
 
-corrnum = 0.85
+corrnum = 0.65
 start = "2000-01-01"
 train_end = "2010-12-31"
 end = "2025-12-31"
@@ -34,8 +34,7 @@ else:
 train_prices = prices.loc[:train_end]
 test_prices = prices.loc[train_end:]
 
-train_returns = train_prices.pct_change().dropna()
-corr_matrix = train_returns.corr()
+corr_matrix = train_prices.corr()
 upper = np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
 corr_matrix = corr_matrix.where(upper).stack().reset_index()
 corr_matrix = corr_matrix.rename(columns={"level_0": "ticker_1", "level_1": "ticker_2", 0: "correlation"})
