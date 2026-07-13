@@ -153,20 +153,36 @@ results_df = pd.DataFrame(results)
 print(results_df.to_string(index=False))
 
 palette = [
-    "#e040fb", "#ce93d8", "#f48fb1", "#f06292", "#ba68c8",
-    "#ab47bc", "#ec407a", "#ff80ab", "#ea80fc", "#b39ddb",
+    "#dc143c",
+    "#c0c0c0",
+    "#00b4d8",
+    "#e63946",
+    "#4fc3f7",
+    "#ff4d6d",
+    "#a8dadc",
+    "#9e0031",
+    "#48cae4",
+    "#d4d4d4",
 ]
 
-fig, ax = plt.subplots(figsize=(14, 7))
-fig.patch.set_facecolor("#0e0e1a")
-ax.set_facecolor("#0e0e1a")
+BG       = "#0a0a0f"
+GRID_COL = "#1a0a0a"
+TEXT_COL = "#c8c8c8"
+SPINE    = "#3a0a0a"
+ZERO     = "#5a1a1a"
 
+fig, ax = plt.subplots(figsize=(15, 7))
+fig.patch.set_facecolor(BG)
+ax.set_facecolor(BG)
+
+pair_returns = {}
 for i, (_, row) in enumerate(top_pairs.iterrows()):
     t1, t2 = row["ticker_1"], row["ticker_2"]
     rets = backtest_pair(test_prices, t1, t2)
+    pair_returns[f"{t1}/{t2}"] = rets
     equity = (1 + rets).cumprod()
     color = palette[i % len(palette)]
-    ax.plot(equity.values, color=color, linewidth=1.4, alpha=0.85, label=f"{t1} / {t2}")
+    ax.plot(equity.values, color=color, linewidth=1.5, alpha=0.9, label=f"{t1} / {t2}")
     ax.annotate(
         f"{t1}/{t2}",
         xy=(len(equity) - 1, equity.iloc[-1]),
@@ -175,23 +191,44 @@ for i, (_, row) in enumerate(top_pairs.iterrows()):
         color=color,
         fontsize=7.5,
         va="center",
+        fontweight="bold",
     )
 
-ax.axhline(1.0, color="#444466", linewidth=0.8, linestyle="--")
-ax.set_title("Equity Curves — Top Cointegrated Pairs (S&P 500)", color="#f0e6ff", fontsize=14, pad=14)
-ax.set_xlabel("Trading Days", color="#9e8fb2", fontsize=10)
-ax.set_ylabel("Cumulative Return", color="#9e8fb2", fontsize=10)
-ax.tick_params(colors="#9e8fb2")
+results_df = pd.DataFrame(results)
+best_sharpe_row = results_df.loc[results_df["sharpe"].idxmax()]
+best_return_row = results_df.loc[results_df["ann_return_%"].idxmax()]
+best_sortino_row = results_df.loc[results_df["sortino"].idxmax()]
+
+stats_text = (
+    f"  Best Sharpe   {best_sharpe_row['pair']}   {best_sharpe_row['sharpe']:.3f}\n"
+    f"  Best Ann. Ret  {best_return_row['pair']}   {best_return_row['ann_return_%']:.2f}%\n"
+    f"  Best Sortino  {best_sortino_row['pair']}   {best_sortino_row['sortino']:.3f}"
+)
+ax.text(
+    0.01, 0.03, stats_text,
+    transform=ax.transAxes,
+    fontsize=8,
+    color="#c0c0c0",
+    verticalalignment="bottom",
+    fontfamily="monospace",
+    bbox=dict(boxstyle="round,pad=0.5", facecolor="#140505", edgecolor="#8b0000", alpha=0.85),
+)
+
+ax.axhline(1.0, color=ZERO, linewidth=0.9, linestyle="--")
+ax.set_title("Equity Curves — Top Cointegrated Pairs (S&P 500, 2010–2025)", color=TEXT_COL, fontsize=14, pad=14)
+ax.set_xlabel("Trading Days", color=TEXT_COL, fontsize=10)
+ax.set_ylabel("Cumulative Return", color=TEXT_COL, fontsize=10)
+ax.tick_params(colors=TEXT_COL)
 for spine in ax.spines.values():
-    spine.set_edgecolor("#2a2040")
-ax.grid(color="#1e1a2e", linewidth=0.6)
+    spine.set_edgecolor(SPINE)
+ax.grid(color=GRID_COL, linewidth=0.6)
 ax.legend(
-    loc="upper left",
+    loc="upper right",
     fontsize=7.5,
-    framealpha=0.2,
-    facecolor="#1a1030",
-    edgecolor="#3a2060",
-    labelcolor="#d8bfff",
+    framealpha=0.25,
+    facecolor="#0f0505",
+    edgecolor="#8b0000",
+    labelcolor=TEXT_COL,
 )
 
 plt.tight_layout()
