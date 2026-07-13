@@ -10,13 +10,11 @@ corrnum = 0.85
 start = "2000-01-01"
 train_end = "2010-12-31"
 end = "2025-12-31"
-z_entry = 2.0
+z_entry = 1.5
 z_exit = 0.5
 z_stop = 3.5
-lookback_hedge = 252
-lookback_zscore = 60
 transaction_cost = 0.001
-max_coint_candidates = 100
+max_coint_candidates = 150
 
 if os.path.exists("prices.csv"):
     prices = pd.read_csv("prices.csv", index_col=0, parse_dates=True)
@@ -30,6 +28,17 @@ else:
     df = yf.download(tickers_list, start=start, end=end)
     prices = df["Close"]
     prices.to_csv("prices.csv")
+
+if os.path.exists("sectors.csv"):
+    sectors = pd.read_csv("sectors.csv", index_col=0).squeeze()
+else:
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
+    tbl = pd.read_html(response.text)[0]
+    sectors = tbl.set_index("Symbol")["GICS Sector"]
+    sectors.index = [s.replace(".", "-") for s in sectors.index]
+    sectors.to_csv("sectors.csv")
 
 train_prices = prices.loc[:train_end]
 test_prices = prices.loc[train_end:]
@@ -45,6 +54,7 @@ corr_matrix = (
     .reset_index(drop=True)
 )
 
+
 def half_life(spread):
     s = spread.dropna().values
     lag = s[:-1]
@@ -55,12 +65,32 @@ def half_life(spread):
         return np.nan
     return -np.log(2) / beta[1]
 
+
+def kalman_hedge(log_p1, log_p2, delta=1e-4, Ve=0.001):
+    n = len(log_p1)
+    Vw = delta / (1 - delta)
+    beta = np.ones(n)
+    P = np.ones(n)
+    for t in range(1, n):
+        P_pred = P[t - 1] + Vw
+        x = log_p2[t]
+        S = x ** 2 * P_pred + Ve
+        K = P_pred * x / S
+        beta[t] = beta[t - 1] + K * (log_p1[t] - beta[t - 1] * x)
+        P[t] = (1 - K * x) * P_pred
+    return beta
+
+
 train_log = np.log(train_prices)
 
 coint_results = []
 for _, row in corr_matrix.iterrows():
     t1, t2 = row["ticker_1"], row["ticker_2"]
     if t1 not in train_log.columns or t2 not in train_log.columns:
+        continue
+    if t1 not in sectors.index or t2 not in sectors.index:
+        continue
+    if sectors[t1] != sectors[t2]:
         continue
     pair_prices = train_log[[t1, t2]].dropna()
     if len(pair_prices) < 252:
@@ -74,31 +104,40 @@ for _, row in corr_matrix.iterrows():
     hl = half_life(spread)
     if np.isnan(hl) or hl < 5 or hl > 60:
         continue
-    coint_results.append({"ticker_1": t1, "ticker_2": t2, "pvalue": pvalue, "half_life": round(hl, 1), "hedge_ratio": hr})
+    coint_results.append({"ticker_1": t1, "ticker_2": t2, "pvalue": pvalue, "half_life": round(hl, 1)})
 
-coint_df = pd.DataFrame(coint_results) if coint_results else pd.DataFrame(columns=["ticker_1", "ticker_2", "pvalue", "half_life", "hedge_ratio"])
+coint_df = pd.DataFrame(coint_results) if coint_results else pd.DataFrame(columns=["ticker_1", "ticker_2", "pvalue", "half_life"])
 coint_df = coint_df.sort_values("pvalue").reset_index(drop=True)
 if coint_df.empty:
     raise ValueError("No cointegrated pairs found. Try lowering corrnum or widening the training window.")
 top_pairs = coint_df.head(10)
 
 
-def backtest_pair(prices, t1, t2, hr, hl):
+def backtest_pair(prices, t1, t2, hl):
     raw = prices[[t1, t2]].dropna()
-    log_pair = np.log(raw)
+    log_p1 = np.log(raw[t1].values)
+    log_p2 = np.log(raw[t2].values)
+
+    kalman_hr = kalman_hedge(log_p1, log_p2)
 
     lb = max(int(hl * 2), 20)
-    spread = log_pair[t1] - hr * log_pair[t2]
-    roll_mean = spread.rolling(lb).mean()
-    roll_std = spread.rolling(lb).std()
-    zscore = (spread - roll_mean) / roll_std
+    spread = log_p1 - kalman_hr * log_p2
+    spread_s = pd.Series(spread, index=raw.index)
+    roll_mean = spread_s.rolling(lb).mean()
+    roll_std = spread_s.rolling(lb).std()
+    zscore = (spread_s - roll_mean) / roll_std
 
-    df = pd.DataFrame({t1: raw[t1], t2: raw[t2], "zscore": zscore}).dropna()
+    df = pd.DataFrame({
+        t1: raw[t1],
+        t2: raw[t2],
+        "zscore": zscore,
+        "hr": kalman_hr,
+    }).dropna()
 
     z = df["zscore"].values
+    hr_arr = df["hr"].values
     p1 = df[t1].values
     p2 = df[t2].values
-    scale = 1.0 + abs(hr)
 
     position = 0
     prev_position = 0
@@ -117,9 +156,10 @@ def backtest_pair(prices, t1, t2, hr, hl):
             if z[i - 1] < z_exit or z[i - 1] > z_stop:
                 position = 0
 
+        hr_t = hr_arr[i - 1]
         r1 = p1[i] / p1[i - 1] - 1
         r2 = p2[i] / p2[i - 1] - 1
-        pnl = position * (r1 - hr * r2) / scale
+        pnl = position * (r1 - hr_t * r2) / (1.0 + abs(hr_t))
 
         if position != prev_position:
             pnl -= transaction_cost * 2
@@ -132,9 +172,8 @@ def backtest_pair(prices, t1, t2, hr, hl):
 
 results = []
 for _, row in top_pairs.iterrows():
-    t1, t2 = row["ticker_1"], row["ticker_2"]
-    hr, hl = row["hedge_ratio"], row["half_life"]
-    rets = backtest_pair(test_prices, t1, t2, hr, hl)
+    t1, t2, hl = row["ticker_1"], row["ticker_2"], row["half_life"]
+    rets = backtest_pair(test_prices, t1, t2, hl)
 
     total_return = (1 + rets).prod() - 1
     n_years = len(rets) / 252
@@ -189,12 +228,9 @@ fig, ax = plt.subplots(figsize=(15, 7))
 fig.patch.set_facecolor(BG)
 ax.set_facecolor(BG)
 
-pair_returns = {}
 for i, (_, row) in enumerate(top_pairs.iterrows()):
-    t1, t2 = row["ticker_1"], row["ticker_2"]
-    hr, hl = row["hedge_ratio"], row["half_life"]
-    rets = backtest_pair(test_prices, t1, t2, hr, hl)
-    pair_returns[f"{t1}/{t2}"] = rets
+    t1, t2, hl = row["ticker_1"], row["ticker_2"], row["half_life"]
+    rets = backtest_pair(test_prices, t1, t2, hl)
     equity = (1 + rets).cumprod()
     color = palette[i % len(palette)]
     ax.plot(equity.values, color=color, linewidth=1.5, alpha=0.9, label=f"{t1} / {t2}")
