@@ -133,7 +133,8 @@ def backtest_pair(prices, t1, t2, hr, hl):
 results = []
 for _, row in top_pairs.iterrows():
     t1, t2 = row["ticker_1"], row["ticker_2"]
-    rets = backtest_pair(test_prices, t1, t2)
+    hr, hl = row["hedge_ratio"], row["half_life"]
+    rets = backtest_pair(test_prices, t1, t2, hr, hl)
 
     total_return = (1 + rets).prod() - 1
     n_years = len(rets) / 252
@@ -150,8 +151,6 @@ for _, row in top_pairs.iterrows():
     profit_factor = round(gross_profit / gross_loss, 3) if gross_loss > 0 else float("inf")
     position_changes = pd.Series(np.diff([0] + [1 if r != 0 else 0 for r in rets.values]))
     num_trades = int((position_changes == 1).sum())
-
-    hl = top_pairs.loc[top_pairs["ticker_1"] == t1].iloc[0]["half_life"] if "half_life" in top_pairs.columns else np.nan
 
     results.append({
         "pair": f"{t1}/{t2}",
@@ -193,7 +192,8 @@ ax.set_facecolor(BG)
 pair_returns = {}
 for i, (_, row) in enumerate(top_pairs.iterrows()):
     t1, t2 = row["ticker_1"], row["ticker_2"]
-    rets = backtest_pair(test_prices, t1, t2)
+    hr, hl = row["hedge_ratio"], row["half_life"]
+    rets = backtest_pair(test_prices, t1, t2, hr, hl)
     pair_returns[f"{t1}/{t2}"] = rets
     equity = (1 + rets).cumprod()
     color = palette[i % len(palette)]
@@ -209,7 +209,6 @@ for i, (_, row) in enumerate(top_pairs.iterrows()):
         fontweight="bold",
     )
 
-results_df = pd.DataFrame(results)
 best_sharpe_row = results_df.loc[results_df["sharpe"].idxmax()]
 best_return_row = results_df.loc[results_df["ann_return_%"].idxmax()]
 best_sortino_row = results_df.loc[results_df["sortino"].idxmax()]
