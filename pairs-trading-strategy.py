@@ -83,28 +83,22 @@ if coint_df.empty:
 top_pairs = coint_df.head(10)
 
 
-def backtest_pair(prices, t1, t2):
+def backtest_pair(prices, t1, t2, hr, hl):
     raw = prices[[t1, t2]].dropna()
     log_pair = np.log(raw)
 
-    roll_cov = log_pair[t1].rolling(lookback_hedge).cov(log_pair[t2])
-    roll_var = log_pair[t2].rolling(lookback_hedge).var()
-    hedge_ratio = roll_cov / roll_var
-
-    spread = log_pair[t1] - hedge_ratio * log_pair[t2]
-    roll_mean = spread.rolling(lookback_zscore).mean()
-    roll_std = spread.rolling(lookback_zscore).std()
+    lb = max(int(hl * 2), 20)
+    spread = log_pair[t1] - hr * log_pair[t2]
+    roll_mean = spread.rolling(lb).mean()
+    roll_std = spread.rolling(lb).std()
     zscore = (spread - roll_mean) / roll_std
 
-    df = raw.copy()
-    df["hedge_ratio"] = hedge_ratio
-    df["zscore"] = zscore
-    df = df.dropna()
+    df = pd.DataFrame({t1: raw[t1], t2: raw[t2], "zscore": zscore}).dropna()
 
     z = df["zscore"].values
-    hr = df["hedge_ratio"].values
     p1 = df[t1].values
     p2 = df[t2].values
+    scale = 1.0 + abs(hr)
 
     position = 0
     prev_position = 0
@@ -125,7 +119,7 @@ def backtest_pair(prices, t1, t2):
 
         r1 = p1[i] / p1[i - 1] - 1
         r2 = p2[i] / p2[i - 1] - 1
-        pnl = position * (r1 - hr[i - 1] * r2)
+        pnl = position * (r1 - hr * r2) / scale
 
         if position != prev_position:
             pnl -= transaction_cost * 2
