@@ -126,9 +126,10 @@ for _, row in top_pairs.iterrows():
     total_return = (1 + rets).prod() - 1
     n_years = len(rets) / 252
     ann_return = (1 + total_return) ** (1 / n_years) - 1 if n_years > 0 else 0
-    sharpe = rets.mean() / rets.std() * np.sqrt(252) if rets.std() > 0 else 0
-    downside = rets[rets < 0].std()
-    sortino = rets.mean() / downside * np.sqrt(252) if downside > 0 else 0
+    active = rets[rets != 0]
+    sharpe = active.mean() / active.std() * np.sqrt(252) if len(active) > 1 else 0
+    downside = active[active < 0].std()
+    sortino = active.mean() / downside * np.sqrt(252) if len(active[active < 0]) > 1 else 0
     cumrets = (1 + rets).cumprod()
     max_dd = (cumrets / cumrets.cummax() - 1).min()
     calmar = ann_return / abs(max_dd) if max_dd != 0 else 0
