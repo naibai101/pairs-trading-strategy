@@ -158,8 +158,11 @@ for _, row in top_pairs.iterrows():
     position_changes = pd.Series(np.diff([0] + [1 if r != 0 else 0 for r in rets.values]))
     num_trades = int((position_changes == 1).sum())
 
+    hl = top_pairs.loc[top_pairs["ticker_1"] == t1].iloc[0]["half_life"] if "half_life" in top_pairs.columns else np.nan
+
     results.append({
         "pair": f"{t1}/{t2}",
+        "half_life_d": hl,
         "ann_return_%": round(ann_return * 100, 2),
         "sharpe": round(sharpe, 3),
         "sortino": round(sortino, 3),
