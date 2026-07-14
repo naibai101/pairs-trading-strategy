@@ -211,6 +211,18 @@ gp      = portfolio[portfolio > 0].sum()
 gl      = abs(portfolio[portfolio < 0].sum())
 pf      = round(float(gp / gl), 3) if gl > 0 else float("inf")
 
+print(f"\n{'='*44}")
+print(f"  PORTFOLIO RESULTS  (2007–2024)")
+print(f"{'='*44}")
+print(f"  Ann. Return    {ann*100:>7.2f}%")
+print(f"  Sharpe Ratio   {sharpe:>7.3f}")
+print(f"  Sortino Ratio  {sortino:>7.3f}")
+print(f"  Calmar Ratio   {calmar:>7.3f}")
+print(f"  Max Drawdown   {mdd*100:>7.2f}%")
+print(f"  Profit Factor  {pf:>7.3f}")
+print(f"  Total Return   {total*100:>7.2f}%")
+print(f"{'='*44}\n")
+
 BG      = "#0a0a0f"
 GRID    = "#12121e"
 TEXT    = "#c8c8d4"
